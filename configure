@@ -170,7 +170,6 @@ configure_dns() {
 }
 
 # Run functions
-add_debianrepositories
 upgrade_packages
 install_packages
 change_timedatectl

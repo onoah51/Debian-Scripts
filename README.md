@@ -20,6 +20,10 @@ This script provides a generic system configuration for Debian-based workstation
 
 The script logs all of its operations to '~/system_setup.log'. This can be useful for troubleshooting or future auditing.
 
+## Information:
+
+This script is a work in progress with script additions and changes coming in the future.
+
 ## Author:
 
 Written by onoah51. Feedback is welcome!

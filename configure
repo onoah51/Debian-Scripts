@@ -8,7 +8,6 @@ exec > >(tee -a "$LOGFILE") 2>&1
 chown noah:noah "/home/noah/system_setup.log"
 chmod 600 "/home/noah/system_setup.log"
 
-
 # Logging function
 log() {
     echo "$1"
@@ -169,7 +168,6 @@ configure_dns() {
         fi
     fi
 }
-
 
 # Run functions
 add_debianrepositories

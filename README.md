@@ -11,13 +11,6 @@ This script provides a generic system configuration for Debian-based workstation
 5. **Configures UFW:** Sets up a secure firewall policy.
 6. **Configures Fail2Ban:** Helps protect your server against malicious authentication attempts.
 
-## Usage:
-
-```sh
-./script_name.sh
-
-Upon execution, the user will be prompted to confirm if they wish to proceed with the configuration.
-
 ## Prequisites:
 
 1. The script assumes that the user has appropriate 'sudo' privileges.
@@ -31,6 +24,9 @@ The script logs all of its operations to '~/system_setup.log'. This can be usefu
 
 Written by onoah51. Contributions and feedback is welcome!
 
-## Disclaimer:
+## Usage:
 
-Always review scripts and configurations before running them, especially when they involve editing system settings or sudo commands. Ensure testing is done in a non-critical environment for applying to production systems.
+```sh
+./script_name.sh
+
+Upon execution, the user will be prompted to confirm if they wish to proceed with the configuration.

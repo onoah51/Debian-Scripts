@@ -1,0 +1,193 @@
+#!/bin/bash
+# Generic system configuration for Debian based workstations/servers
+# Version 1.0
+# Written by onoah51
+
+LOGFILE="/home/noah/system_setup.log"
+exec > >(tee -a "$LOGFILE") 2>&1
+chown noah:noah "/home/noah/system_setup.log"
+chmod 600 "/home/noah/system_setup.log"
+
+
+# Logging function
+log() {
+    echo "$1"
+}
+
+# Error check function
+check_error() {
+    if [ $? -ne 0 ]; then
+        log "Error: $1"
+        exit 1
+    fi
+}
+
+echo "This is a generic system configuration for Debian based workstations/servers"
+read -p "Do you want to proceed with the configuration (yes/no)? " confirmation
+
+if [ "$confirmation" != "yes" ]; then
+    echo "Aborting."
+    exit 0
+fi
+
+# Function to verify the correct Debian stable repositories
+add_debianrepositories() {
+    sudo cp "/etc/apt/sources.list" "/etc/apt/sources.list.backup"
+    sudo rm "/etc/apt/sources.list" && sudo touch "/etc/apt/sources.list"
+    echo "deb http://deb.debian.org/debian stable main" | sudo tee -a "/etc/apt/sources.list"
+    echo "deb-src http://deb.debian.org/debian stable main" | sudo tee -a "/etc/apt/sources.list"
+    echo "deb http://deb.debian.org/debian-security/ stable/updates main" | sudo tee -a "/etc/apt/sources.list"
+    echo "deb-src http://deb.debian.org/debian-security/ stable/updates main" | sudo tee -a "/etc/apt/sources.list"
+    echo "deb http://deb.debian.org/debian stable-updates main" | sudo tee -a "/etc/apt/sources.list"
+    echo "deb-src http://deb.debian.org/debian stable-updates main" | sudo tee -a "/etc/apt/sources.list"
+    sudo chmod -w "/etc/apt/sources.list"
+    sudo chown root:root /etc/apt/sources.list
+    sudo chmod 644 /etc/apt/sources.list
+}
+
+# Function to upgrade system packages
+upgrade_packages() {
+    log "Upgrading system packages..."
+    sudo apt-get update -y && sudo apt upgrade -y
+    check_error "Failed upgrading packages."
+}
+
+# Function to install required packages
+install_packages() {
+    log "Installing required packages..."
+    sudo apt-get install ufw curl git wget fail2ban openssh-server nano btop net-tools ntp systemd-timesyncd -y
+    check_error "Failed installing packages."
+}
+
+# Function to change timezone
+change_timedatectl() {
+    sudo timedatectl set-timezone America/Chicago
+    echo "NTP=us.pool.ntp.org" | sudo tee -a "/etc/systemd/timesyncd.conf" > /dev/null
+    sudo systemctl unmask systemd-timesyncd
+    sudo systemctl restart systemd-timesyncd
+    sudo timedatectl timesync-status
+}
+
+# Function to make temp directory and clone GH repo
+make_tempdir_and_clone() {
+    log "Cloning GitHub Repository..."
+    mkdir -p "/home/noah/temp" && git clone "https://github.com/onoah51/Debian" "/home/noah/temp/Debian"
+    check_error "Failed cloning repository."
+}
+
+# Check if the file exists
+check_file_exists() {
+    if [ ! -f $1 ]; then
+        log "Error: $1 does not exist."
+        exit 1
+    fi
+}
+
+# Verify the integrity using checksum (work in progress)
+verify_checksum() {
+    computed_checksum=$(sha256sum $1 | awk '{ print $1 }')
+    provided_checksum=$(grep $(basename $1) "/home/noah/temp/Debian/checksum.txt" | awk '{ print $2 }')
+
+    if [ "$computed_checksum" != "$provided_checksum" ]; then
+        log "Error: Checksum verification failed for $1"
+        exit 1
+    fi
+}
+
+# Function to configure and secure SSH server
+configure_ssh() {
+    log "Configuring the SSH Server daemon..."
+    check_file_exists "/home/noah/temp/Debian/sshd_config"
+    verify_checksum "/home/noah/temp/Debian/sshd_config"
+    sudo cp "/etc/ssh/sshd_config" "/etc/ssh/sshd_config.backup"
+    check_error "Failed backing up SSH configuration."
+    sudo mv "/home/noah/temp/Debian/sshd_config" "/etc/ssh/sshd_config"
+    check_error "Failed updating SSH configuration."
+    sudo systemctl enable sshd
+    sudo systemctl restart sshd
+    sudo chown root:root "/etc/ssh/sshd_config"
+    sudo chmod 600 "/etc/ssh/sshd_config"
+}
+
+# Function to configure UFW
+configure_ufw() {
+    log "Configuring UFW..."
+    sudo systemctl enable ufw
+    sudo systemctl start ufw
+    sudo ufw enable
+    sudo ufw default deny incoming
+    sudo ufw default allow outgoing
+    sudo ufw reload
+    sudo systemctl restart ufw
+}
+
+# Function to configure Fail2Ban
+configure_fail2ban() {
+    log "Configuring the Fail2Ban daemon..."
+    check_file_exists "/home/noah/temp/Debian/jail.conf"
+    verify_checksum "/home/noah/temp/Debian/jail.conf"
+    sudo cp "/etc/fail2ban/jail.conf" "/etc/fail2ban/jail.conf.backup"
+    check_error "Failed backing up Fail2Ban configuration."
+    sudo mv "/home/noah/temp/Debian/jail.conf" "/etc/fail2ban/jail.conf"
+    check_error "Failed updating Fail2Ban configuration."
+    sudo systemctl enable fail2ban
+    sudo systemctl restart fail2ban
+}
+
+# Function to change hostname
+configure_hostname() {
+    read -p "Do you want to change the hostname? (y/n): " choice
+	 
+	    if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+	        read -p "Enter the new hostname: " newHostname
+            oldHostname=$(hostname)
+            sudo hostnamectl set-hostname $newHostname
+            check_error "Failed to set hostname"
+            sudo cp "/etc/hosts" "/etc/hosts.backup"
+            sudo sed -i "s/127.0.1.1\s*$oldHostname/127.0.1.1\t$newHostname/" "/etc/hosts"
+            check_error "Failed to edit /etc/hosts file"
+	        echo "Hostname changed to: $newHostname"
+	    fi
+}
+
+# Function to change DNS servers
+configure_dns() {
+    read -p "Do you want to change the default DNS servers? (y/n): " choice
+
+    if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+        DNS_SERVERS="9.9.9.9 149.112.112.112"
+        
+        # Check if DNS servers are already in the file (Prevents multiple additions if script is run more than once.)
+        if ! grep -q "$DNS_SERVERS" "/etc/systemd/resolved.conf"; then
+            sudo cp "/etc/systemd/resolved.conf" "/etc/systemd/resolved.conf.backup"
+            sudo chown root:root "/etc/systemd/resolved.conf.backup"
+            sudo chmod 600 "/etc/systemd/resolved.conf.backup"
+            echo "DNS=$DNS_SERVERS" | sudo tee -a "/etc/systemd/resolved.conf"
+            sudo systemctl restart systemd-resolved
+        else
+            log "DNS servers $DNS_SERVERS are already set."
+        fi
+    fi
+}
+
+
+# Run functions
+add_debianrepositories
+upgrade_packages
+install_packages
+change_timedatectl
+make_tempdir_and_clone
+configure_ssh
+configure_ufw
+configure_fail2ban
+configure_hostname
+configure_dns
+
+log "Script is complete!"
+
+read -p "The script is complete! Would you like to reboot? (yes/no)? " confirmation
+
+if [ "$confirmation" != "yes" ]; then
+    exit 0
+fi
+sudo reboot now

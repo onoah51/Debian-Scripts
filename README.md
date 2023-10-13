@@ -36,6 +36,6 @@ Crafted by onoah51. Feedback, suggestions, or contributions are always appreciat
 
 To deploy the script, use the following command:
 
-sudo ./configure.sh
+sudo ./configure
 
 Upon execution, the user will be prompted to confirm if they wish to proceed with the configuration.
